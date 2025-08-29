@@ -45,11 +45,53 @@ public class WebhookSubmitApplication implements CommandLineRunner {
             String webhook = (String) response.getBody().get("webhook");
             String accessToken = (String) response.getBody().get("accessToken");
 
-            System.out.println("✅ Webhook: " + webhook);
-            System.out.println("✅ Access Token: " + accessToken);
+            System.out.println("Webhook: " + webhook);
+System.out.println("Access Token: " + accessToken);
 
-            // 2. Decide SQL query based on regNo last digit
-            String regNo = body.get("regNo");
+// 2. Test webhook before submitting SQL
+Map<String, String> testBody = new HashMap<>();
+testBody.put("name", body.get("name"));
+testBody.put("email", body.get("email"));
+
+String[] headerKeys = {"Authorization", "Authorization", "accessToken"};
+String[] headerValues = {"Bearer " + accessToken, accessToken, accessToken};
+
+boolean success = false;
+
+for (int i = 0; i < headerKeys.length; i++) {
+    try {
+        HttpHeaders testHeaders = new HttpHeaders();
+        testHeaders.setContentType(MediaType.APPLICATION_JSON);
+        testHeaders.set(headerKeys[i], headerValues[i]);
+
+        HttpEntity<Map<String, String>> testRequest = new HttpEntity<>(testBody, testHeaders);
+
+        ResponseEntity<String> testResponse = restTemplate.exchange(
+                webhook,
+                HttpMethod.POST,
+                testRequest,
+                String.class
+        );
+
+        System.out.println("✅ Test Success with header [" + headerKeys[i] + "] : " + testResponse.getBody());
+        success = true;
+        break; // mil gaya, aur try karne ki need nahi
+    } catch (Exception ex) {
+        System.out.println("❌ Failed with header [" + headerKeys[i] + "] → " + ex.getMessage());
+    }
+}
+
+if (!success) {
+    System.err.println("❌ All header formats failed! Ab SQL submit nahi hoga.");
+    return;
+}
+
+
+
+// 3. Decide SQL query based on regNo last digit
+String regNo = body.get("regNo");
+
+         
             int lastDigit = Character.getNumericValue(regNo.charAt(regNo.length() - 1));
 
             String finalQuery;
@@ -82,14 +124,21 @@ public class WebhookSubmitApplication implements CommandLineRunner {
             submitBody.put("finalQuery", finalQuery);
 
             HttpHeaders submitHeaders = new HttpHeaders();
-            submitHeaders.setContentType(MediaType.APPLICATION_JSON);
-            submitHeaders.setBearerAuth(accessToken);
+        submitHeaders.setContentType(MediaType.APPLICATION_JSON);
+        // IMPORTANT: same as test → explicit add karna
+        submitHeaders.set("Authorization",accessToken);
 
-            HttpEntity<Map<String, String>> submitRequest = new HttpEntity<>(submitBody, submitHeaders);
+        HttpEntity<Map<String, String>> submitRequest = new HttpEntity<>(submitBody, submitHeaders);
 
-            ResponseEntity<String> submitResponse = restTemplate.postForEntity(webhook, submitRequest, String.class);
+        ResponseEntity<String> submitResponse = restTemplate.exchange(
+                webhook,
+                HttpMethod.POST,
+                submitRequest,
+                String.class
+        );
 
-            System.out.println("✅ Submission Response: " + submitResponse.getBody());
+        System.out.println("✅ Submission Response: " + submitResponse.getBody());
+
 
         } catch (Exception e) {
             e.printStackTrace();
